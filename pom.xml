@@ -14,9 +14,26 @@
                 <directory>src/main/resources</directory>
             </resource>
         </resources>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/org.bytedeco/javacv -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv</artifactId>
+            <version>1.5.2</version>
+        </dependency>
 
         <!-- deeplearning4j dependencies -->
         <dependency>
@@ -50,11 +67,12 @@
             <artifactId>nd4j-native-platform</artifactId>
             <version>${dl4j-version}</version>
         </dependency>
-
     </dependencies>
 
     <properties>
         <java.version>13</java.version>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
         <dl4j-version>1.0.0-beta6</dl4j-version>
     </properties>
 
