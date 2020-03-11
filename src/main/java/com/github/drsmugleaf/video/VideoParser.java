@@ -24,7 +24,6 @@ public class VideoParser {
         CONVERTER = new Java2DFrameConverter();
         String scale = String.format("scale=%d:%d", width, height);
         FILTER = new FFmpegFrameFilter(scale, width, height);
-        start();
     }
 
     public VideoParser(String file, int height, int width) {
@@ -47,18 +46,20 @@ public class VideoParser {
         return FILTER;
     }
 
-    protected void start() {
+    protected void restart() {
         try {
-            getGrabber().start();
-            getFilter().start();
+            getGrabber().restart();
+            getFilter().restart();
         } catch (FrameGrabber.Exception e) {
-            throw new IllegalStateException("Error starting grabber", e);
+            throw new IllegalStateException("Error restarting grabber", e);
         } catch (FrameFilter.Exception e) {
-            throw new IllegalStateException("Error starting filter", e);
+            throw new IllegalStateException("Error restarting filter", e);
         }
     }
 
     public Stream<Frame> getFrames() {
+        restart();
+
         return Stream.generate(() -> {
             try {
                 return getGrabber().grabFrame(false, true, true, false);
@@ -101,8 +102,10 @@ public class VideoParser {
     }
 
     public void show(long maxAmount) {
+        Stream<Frame> frames = getFrames();
         CanvasFrame canvas = new CanvasFrame("Lava Lamp", CanvasFrame.getDefaultGamma() / getGrabber().getGamma());
-        getFrames().limit(maxAmount).forEachOrdered(frame -> {
+
+        frames.limit(maxAmount).forEachOrdered(frame -> {
             canvas.showImage(frame);
 
             try {
