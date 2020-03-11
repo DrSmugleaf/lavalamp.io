@@ -1,11 +1,9 @@
-package com.github.drsmugleaf.parser;
+package com.github.drsmugleaf.video;
 
 import org.bytedeco.javacv.*;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -29,27 +27,8 @@ public class VideoParser {
         start();
     }
 
-    public VideoParser(String path, int height, int width) {
-        this(new File(path), height, width);
-    }
-
-    public static List<VideoParser> from(File directory, int height, int width) {
-        List<VideoParser> parsers = new ArrayList<>();
-        if (!directory.isDirectory()) {
-            throw new IllegalArgumentException("Path isn't a directory: " + directory);
-        }
-
-        File[] files = directory.listFiles();
-        if (files == null) {
-            throw new IllegalArgumentException("Error reading files from directory " + directory);
-        }
-
-        for (File file : files) {
-            VideoParser parser = new VideoParser(file, height, width);
-            parsers.add(parser);
-        }
-
-        return parsers;
+    public VideoParser(String file, int height, int width) {
+        this(new File(file), height, width);
     }
 
     public File getFile() {
@@ -100,12 +79,25 @@ public class VideoParser {
         return getFrames().map(frame -> getConverter().convert(frame));
     }
 
-    public Stream<int[]> getRGB() {
-        return getImages().map(image -> {
-            int width = image.getWidth();
-            int height = image.getHeight();
-            return image.getRGB(0, 0, width, height, null, 0, width);
-        });
+    public Stream<int[][][]> getRGB() {
+        return getImages()
+                .map(image -> {
+                    int width = image.getWidth();
+                    int height = image.getHeight();
+                    int[][][] pixels = new int[width][height][3];
+
+                    for (int x = 0; x < width; x++) {
+                        for (int y = 0; y < height; y++) {
+                            int rgb = image.getRGB(x, y);
+                            int red = (rgb & 0xff0000) >> 16;
+                            int green = (rgb & 0xff00) >> 8;
+                            int blue = rgb & 0xff;
+                            pixels[x][y] = new int[]{red, green, blue};
+                        }
+                    }
+
+                    return pixels;
+                });
     }
 
     public void show(long maxAmount) {
@@ -119,6 +111,22 @@ public class VideoParser {
                 throw new IllegalStateException("Error sleeping thread", e);
             }
         });
+    }
+
+    public int[][][][][] segment(int length) {
+        int[][][][] frames = getRGB().toArray(int[][][][]::new);
+        int[][][][][] segments = new int[frames.length][length][][][];
+
+        for (int i = 0; i < frames.length - 1; i++) {
+            int[][][] frame = frames[i];
+            int j = i;
+            for (int k = 0; i - j < length && j >= 0; k++) {
+                segments[j][k] = frame;
+                j--;
+            }
+        }
+
+        return segments;
     }
 
 }

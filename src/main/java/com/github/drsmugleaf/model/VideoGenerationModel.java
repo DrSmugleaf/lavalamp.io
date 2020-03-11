@@ -9,6 +9,7 @@ import org.deeplearning4j.nn.conf.preprocessor.CnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.CnnToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToCnnPreProcessor;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.learning.config.AdaGrad;
@@ -19,10 +20,10 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
  */
 public class VideoGenerationModel {
 
-    private final MultiLayerConfiguration CONFIGURATION;
+    private final MultiLayerNetwork NETWORK;
 
     public VideoGenerationModel(int seed, int height, int width, int frames) {
-        CONFIGURATION = new NeuralNetConfiguration.Builder()
+        MultiLayerConfiguration configuration = new NeuralNetConfiguration.Builder()
                 .seed(seed)
                 .l2(0.001)
                 .updater(new AdaGrad(0.04))
@@ -116,6 +117,12 @@ public class VideoGenerationModel {
                 .tBPTTForwardLength(frames / 5)
                 .tBPTTBackwardLength(frames / 5)
                 .build();
+
+        NETWORK = new MultiLayerNetwork(configuration);
+    }
+
+    public MultiLayerNetwork getNetwork() {
+        return NETWORK;
     }
 
 }
