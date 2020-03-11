@@ -1,10 +1,11 @@
 package com.github.drsmugleaf.parser;
 
-import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.*;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -14,26 +15,45 @@ import java.util.stream.Stream;
  */
 public class VideoParser {
 
-    private final File PATH;
+    private final File FILE;
     private final FFmpegFrameGrabber GRABBER;
     private final Java2DFrameConverter CONVERTER;
     private final FFmpegFrameFilter FILTER;
 
-    public VideoParser(File path, int width, int height) {
-        PATH = path;
-        GRABBER = new FFmpegFrameGrabber(PATH);
+    public VideoParser(File file, int height, int width) {
+        FILE = file;
+        GRABBER = new FFmpegFrameGrabber(FILE);
         CONVERTER = new Java2DFrameConverter();
         String scale = String.format("scale=%d:%d", width, height);
         FILTER = new FFmpegFrameFilter(scale, width, height);
         start();
     }
 
-    public VideoParser(String path, int width, int height) {
-        this(new File(path), width, height);
+    public VideoParser(String path, int height, int width) {
+        this(new File(path), height, width);
     }
 
-    public File getPath() {
-        return PATH;
+    public static List<VideoParser> from(File directory, int height, int width) {
+        List<VideoParser> parsers = new ArrayList<>();
+        if (!directory.isDirectory()) {
+            throw new IllegalArgumentException("Path isn't a directory: " + directory);
+        }
+
+        File[] files = directory.listFiles();
+        if (files == null) {
+            throw new IllegalArgumentException("Error reading files from directory " + directory);
+        }
+
+        for (File file : files) {
+            VideoParser parser = new VideoParser(file, height, width);
+            parsers.add(parser);
+        }
+
+        return parsers;
+    }
+
+    public File getFile() {
+        return FILE;
     }
 
     public FFmpegFrameGrabber getGrabber() {
