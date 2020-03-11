@@ -67,6 +67,13 @@
             <artifactId>nd4j-native-platform</artifactId>
             <version>${dl4j-version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>17.0.0</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <properties>
