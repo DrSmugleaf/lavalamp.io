@@ -1,9 +1,12 @@
 package com.github.drsmugleaf.video;
 
 import org.bytedeco.javacv.*;
+import org.datavec.image.loader.NativeImageLoader;
+import org.nd4j.linalg.api.ndarray.INDArray;
 
-import java.awt.image.BufferedImage;
+import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -14,16 +17,15 @@ import java.util.stream.Stream;
 public class VideoParser {
 
     private final File FILE;
-    private final FFmpegFrameGrabber GRABBER;
-    private final Java2DFrameConverter CONVERTER;
-    private final FFmpegFrameFilter FILTER;
+    private final int HEIGHT;
+    private final int WIDTH;
+    private final NativeImageLoader LOADER;
 
     public VideoParser(File file, int height, int width) {
         FILE = file;
-        GRABBER = new FFmpegFrameGrabber(FILE);
-        CONVERTER = new Java2DFrameConverter();
-        String scale = String.format("scale=%d:%d", width, height);
-        FILTER = new FFmpegFrameFilter(scale, width, height);
+        HEIGHT = height;
+        WIDTH = width;
+        LOADER = new NativeImageLoader(height, width, 3);
     }
 
     public VideoParser(String file, int height, int width) {
@@ -34,102 +36,98 @@ public class VideoParser {
         return FILE;
     }
 
-    public FFmpegFrameGrabber getGrabber() {
-        return GRABBER;
+    public int getHeight() {
+        return HEIGHT;
     }
 
-    public Java2DFrameConverter getConverter() {
-        return CONVERTER;
+    public int getWidth() {
+        return WIDTH;
     }
 
-    public FFmpegFrameFilter getFilter() {
-        return FILTER;
+    protected FFmpegFrameGrabber newGrabber() {
+        return new FFmpegFrameGrabber(FILE);
     }
 
-    protected void restart() {
-        try {
-            getGrabber().restart();
-            getFilter().restart();
-        } catch (FrameGrabber.Exception e) {
-            throw new IllegalStateException("Error restarting grabber", e);
-        } catch (FrameFilter.Exception e) {
-            throw new IllegalStateException("Error restarting filter", e);
-        }
+    public FFmpegFrameFilter newFilter() {
+        String scale = String.format("scale=%d:%d", getWidth(), getHeight());
+        return new FFmpegFrameFilter(scale, getWidth(), getHeight());
+    }
+
+    public NativeImageLoader getLoader() {
+        return LOADER;
     }
 
     public Stream<Frame> getFrames() {
-        restart();
+        FFmpegFrameGrabber grabber = newGrabber();
+        FFmpegFrameFilter filter = newFilter();
+
+        try {
+            grabber.start();
+            filter.start();
+        } catch (FrameGrabber.Exception e) {
+            throw new IllegalStateException("Error starting frame grabber", e);
+        } catch (FrameFilter.Exception e) {
+            throw new IllegalStateException("Error starting filter grabber", e);
+        }
 
         return Stream.generate(() -> {
             try {
-                return getGrabber().grabFrame(false, true, true, false);
+                return grabber.grabFrame(false, true, true, false);
             } catch (FrameGrabber.Exception e) {
-                throw new IllegalStateException("Error grabbing frame");
+                throw new IllegalStateException("Error grabbing frame", e);
+            }
+        }).onClose(() -> {
+            try {
+                grabber.close();
+                filter.close();
+            } catch (FrameGrabber.Exception e) {
+                throw new IllegalStateException("Error closing frame grabber", e);
+            } catch (FrameFilter.Exception e) {
+                throw new IllegalStateException("Error closing filter grabber", e);
             }
         }).takeWhile(Objects::nonNull).map(frame -> {
             try {
-                getFilter().push(frame);
-                return getFilter().pull();
+                filter.push(frame);
+                return filter.pull();
             } catch (FrameFilter.Exception e) {
                 throw new IllegalStateException("Error resizing frame",  e);
             }
         });
     }
 
-    public Stream<BufferedImage> getImages() {
-        return getFrames().map(frame -> getConverter().convert(frame));
-    }
-
-    public Stream<int[][][]> getRGB() {
-        return getImages()
-                .map(image -> {
-                    int width = image.getWidth();
-                    int height = image.getHeight();
-                    int[][][] pixels = new int[width][height][3];
-
-                    for (int x = 0; x < width; x++) {
-                        for (int y = 0; y < height; y++) {
-                            int rgb = image.getRGB(x, y);
-                            int red = (rgb & 0xff0000) >> 16;
-                            int green = (rgb & 0xff00) >> 8;
-                            int blue = rgb & 0xff;
-                            pixels[x][y] = new int[]{red, green, blue};
-                        }
-                    }
-
-                    return pixels;
-                });
-    }
-
-    public void show(long maxAmount) {
-        Stream<Frame> frames = getFrames();
-        CanvasFrame canvas = new CanvasFrame("Lava Lamp", CanvasFrame.getDefaultGamma() / getGrabber().getGamma());
-
-        frames.limit(maxAmount).forEachOrdered(frame -> {
-            canvas.showImage(frame);
-
+    public Stream<INDArray> getMatrices() {
+        return getFrames().map(frame -> {
             try {
-                TimeUnit.MICROSECONDS.sleep(33333);
-            } catch (InterruptedException e) {
-                throw new IllegalStateException("Error sleeping thread", e);
+                return getLoader().asMatrix(frame);
+            } catch (IOException e) {
+                throw new IllegalStateException("Error converting frame to matrix", e);
             }
         });
     }
 
-    public int[][][][][] segment(int length) {
-        int[][][][] frames = getRGB().toArray(int[][][][]::new);
-        int[][][][][] segments = new int[frames.length][length][][][];
-
-        for (int i = 0; i < frames.length - 1; i++) {
-            int[][][] frame = frames[i];
-            int j = i;
-            for (int k = 0; i - j < length && j >= 0; k++) {
-                segments[j][k] = frame;
-                j--;
-            }
+    public void show() {
+        double gamma;
+        try (FFmpegFrameGrabber grabber = newGrabber()) {
+            gamma = CanvasFrame.getDefaultGamma() / grabber.getGamma();
+        } catch (FrameGrabber.Exception e) {
+            throw new IllegalStateException("Error closing frame grabber", e);
         }
 
-        return segments;
+        CanvasFrame canvas = new CanvasFrame("Lava Lamp", gamma);
+
+        try(Stream<Frame> frames = getFrames()) {
+            frames.forEachOrdered(frame -> {
+                canvas.showImage(frame);
+
+                try {
+                    TimeUnit.MICROSECONDS.sleep(33333);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException("Error sleeping thread", e);
+                }
+            });
+        }
+
+        canvas.dispatchEvent(new WindowEvent(canvas, WindowEvent.WINDOW_CLOSING));
     }
 
 }
