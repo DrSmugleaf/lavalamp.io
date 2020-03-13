@@ -22,7 +22,7 @@ public class VideoGenerationModel {
 
     private final MultiLayerNetwork NETWORK;
 
-    public VideoGenerationModel(int seed, int height, int width, int frames) {
+    public VideoGenerationModel(int seed, int height, int width) {
         MultiLayerConfiguration configuration = new NeuralNetConfiguration.Builder()
                 .seed(seed)
                 .l2(0.001)
@@ -114,8 +114,8 @@ public class VideoGenerationModel {
                 .inputPreProcessor(5, new RnnToCnnPreProcessor(7, 7, 10))
                 .inputPreProcessor(8, new CnnToRnnPreProcessor(height, width, 3))
                 .backpropType(BackpropType.TruncatedBPTT)
-                .tBPTTForwardLength(frames / 5)
-                .tBPTTBackwardLength(frames / 5)
+                .tBPTTForwardLength(50)
+                .tBPTTBackwardLength(50)
                 .build();
 
         NETWORK = new MultiLayerNetwork(configuration);
